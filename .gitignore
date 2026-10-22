@@ -1,0 +1,23 @@
+# Dependencies and generated builds
+node_modules/
+dist/
+release/
+out/
+
+# Local transcription engine, downloaded source, binaries, and models
+tools/
+
+# Local environment and logs
+.env
+.env.*
+!.env.example
+*.log
+npm-debug.log*
+
+# Operating system and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Temporary audio conversion output
+lucao-*.wav
