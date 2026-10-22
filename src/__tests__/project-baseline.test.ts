@@ -5,9 +5,10 @@ import path from 'node:path';
 import { normalizeSettings, DEFAULT_SETTINGS } from '../modules/settings';
 import { checkTooling } from '../modules/diagnostics';
 import { createWhisperConfig, WHISPER_MODELS } from '../modules/transcription';
-import { isSupportedAudioFile, getAudioDurationEstimate } from '../modules/audio';
+import { isSupportedAudioFile, formatAudioDuration } from '../modules/audio';
 import { TaskQueue } from '../modules/queue';
 import { createTranscriptionRecord } from '../modules/database';
+import { AppStore } from '../modules/database/store';
 import { serializeTranscript } from '../modules/export';
 import { findExecutableOnPath } from '../modules/transcription';
 
@@ -16,7 +17,7 @@ describe('LUCAO baseline', () => {
     expect(normalizeSettings(undefined)).toEqual(DEFAULT_SETTINGS);
     const custom = normalizeSettings({ defaultLanguage: 'pt-BR', maxConcurrentTasks: 3, startWithWindows: true });
     expect(custom.defaultLanguage).toBe('pt-BR');
-    expect(custom.maxConcurrentTasks).toBe(3);
+    expect(custom.maxConcurrentTasks).toBe(1);
     expect(custom.startWithWindows).toBe(true);
   });
 
@@ -54,10 +55,11 @@ describe('LUCAO baseline', () => {
     }
   });
 
-  it('accepts the desired audio extensions and estimates duration', () => {
+  it('accepts supported audio files and formats only measured durations', () => {
     expect(isSupportedAudioFile('audio.mp3')).toBe(true);
     expect(isSupportedAudioFile('audio.txt')).toBe(false);
-    expect(getAudioDurationEstimate('long_audio.wav')).toMatch(/\d{2}:\d{2}/);
+    expect(formatAudioDuration(402)).toBe('6:42');
+    expect(formatAudioDuration(undefined)).toBe('Duração indisponível');
   });
 
   it('manages a task queue with real lifecycle states', () => {
@@ -73,5 +75,42 @@ describe('LUCAO baseline', () => {
     expect(record.language).toBe('pt-BR');
     expect(serializeTranscript('Olá mundo', 'txt')).toBe('Olá mundo');
     expect(serializeTranscript('Olá mundo', 'vtt')).toContain('WEBVTT');
+  });
+
+  it('persists file records, settings, and logs across database sessions', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'lucao-store-'));
+    const databasePath = path.join(directory, 'test.json');
+    const audio = {
+      path: path.join(directory, 'sample.wav'),
+      name: 'sample.wav',
+      size: 128,
+      type: '.wav',
+    };
+    let store = new AppStore(databasePath);
+
+    try {
+      const file = store.addFile(audio, audio.size);
+      expect(file.status).toBe('waiting');
+      expect(store.updateFile(audio.path, {
+        status: 'done',
+        transcript: 'Olá mundo',
+        resultPath: path.join(directory, 'sample-transcricao.txt'),
+      })).toBe(true);
+      store.addFile({ ...audio, path: path.join(directory, 'pending.wav'), name: 'pending.wav' }, audio.size);
+      expect(store.clearPendingFiles()).toBe(1);
+      expect(store.saveSettings({ defaultLanguage: 'pt-BR', defaultModel: 'base' }).defaultModel).toBe('base');
+      store.log('info', 'Teste de persistência');
+      store.close();
+
+      store = new AppStore(databasePath);
+      expect(store.listFiles()[0].transcript).toBe('Olá mundo');
+      expect(store.listFiles()[0].resultPath).toBe(path.join(directory, 'sample-transcricao.txt'));
+      expect(store.listHistory()[0].status).toBe('done');
+      expect(store.getSettings().defaultModel).toBe('base');
+      expect(store.listLogs()[0].message).toBe('Teste de persistência');
+    } finally {
+      store.close();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
   });
 });

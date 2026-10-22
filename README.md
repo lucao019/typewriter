@@ -7,12 +7,15 @@ Aplicativo desktop para transcrever arquivos de áudio localmente, com foco em p
 - Seleção de um ou mais arquivos de áudio pelo seletor nativo do Windows.
 - Conversão do áudio para WAV mono a 16 kHz com FFmpeg.
 - Transcrição local com whisper.cpp e o modelo `small`.
-- Exibição do texto transcrito na lista de arquivos e gravação de um arquivo `.txt` junto ao áudio original.
+- Exibição do texto transcrito, reprocessamento do histórico e exportação do resultado como `.txt`.
 - Mensagens de erro quando faltam ferramentas, modelos ou arquivos válidos.
+- Fila sequencial com progresso reportado pelo Whisper.cpp e cancelamento da tarefa ativa.
+- Histórico persistente de transcrições, configurações e logs no computador.
+- Diagnóstico local de FFmpeg, Whisper, modelo selecionado e diretório de dados.
 
 Formatos aceitos: WAV, MP3, M4A, AAC, FLAC, OGG, OPUS e WEBM.
 
-> O histórico persistente, as configurações completas, a exportação em vários formatos e os demais módulos ainda estão em desenvolvimento.
+> O histórico e as configurações são armazenados como JSON no diretório de dados do Electron. Transcrições temporárias WAV são removidas por padrão. O processamento permanece local.
 
 ## Tecnologias
 
@@ -21,7 +24,7 @@ Formatos aceitos: WAV, MP3, M4A, AAC, FLAC, OGG, OPUS e WEBM.
 - FFmpeg para preparar o áudio.
 - whisper.cpp para inferência local.
 - Vitest para testes.
-- SQLite (`better-sqlite3`) como dependência prevista para persistência futura.
+- Arquivo JSON local com substituição atômica para persistir fila, histórico, configurações e logs.
 
 Consulte [FERRAMENTAS.md](./FERRAMENTAS.md) para detalhes de desenvolvimento, dependências e mecanismo de transcrição.
 
@@ -68,7 +71,16 @@ npm run build
 npm run start
 ```
 
-Selecione os arquivos usando **Selecionar arquivos** e pressione **Transcrever**. O texto é exibido no aplicativo e salvo como `<nome-do-audio>-transcricao.txt` na pasta do áudio.
+Selecione os arquivos usando **Selecionar arquivos** e pressione **Iniciar selecionados**. Por padrão, o texto é salvo como `<nome-do-audio>-transcricao.txt` junto ao áudio; uma pasta de saída pode ser configurada. A interface permite abrir, copiar, exportar novamente e reprocessar registros do histórico.
+
+## Limitações conhecidas
+
+- Modelos não são baixados pela interface; use o script de setup local.
+- A fila executa uma transcrição por vez. Pausa e concorrência paralela não são suportadas.
+- A saída atual contém texto, sem timestamps segmentados; por isso, SRT e VTT não são oferecidos.
+- A aceleração por GPU e a telemetria de recursos não estão implementadas.
+- A preferência de inicialização automática é aplicada no Windows.
+- O armazenamento local não é criptografado. Os dados permanecem no perfil local do usuário.
 
 ## Desenvolvimento e validação
 
@@ -95,6 +107,8 @@ scripts/           Configuração e verificação das ferramentas locais
 tools/             Whisper.cpp e modelos locais (não versionados)
 ```
 
+O arquivo de dados do aplicativo é `lucao-data.json` no diretório `userData` do Electron.
+
 ## Princípios do projeto
 
 Este projeto prioriza processamento local, transparência sobre o estado real das funcionalidades, privacidade dos arquivos de áudio e mudanças pequenas que possam ser testadas. Veja [MENTALIDADE.md](./MENTALIDADE.md).
@@ -104,3 +118,4 @@ Este projeto prioriza processamento local, transparência sobre o estado real da
 - [FERRAMENTAS.md](./FERRAMENTAS.md) — stack, dependências e setup local.
 - [CHANGELOG.md](./CHANGELOG.md) — mudanças por versão.
 - [MENTALIDADE.md](./MENTALIDADE.md) — princípios e critérios de decisão.
+- [docs/CONTROLES.md](./docs/CONTROLES.md) — controles da interface, operações reais e limitações.

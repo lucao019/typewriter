@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 
 export type WhisperModel = 'tiny' | 'base' | 'small' | 'medium' | 'large';
 
@@ -18,6 +18,12 @@ export type TranscriptionResult = {
   outputPath?: string;
   language: string;
   model: WhisperModel;
+};
+
+export type TranscriptionOptions = Partial<WhisperConfig> & {
+  outputDir?: string;
+  modelsDirectory?: string;
+  keepTemporaryFiles?: boolean;
 };
 
 export const WHISPER_MODELS: Array<{ value: WhisperModel; label: string; memoryMb: number; speed: string; precision: string }> = [
@@ -67,6 +73,7 @@ export function findExecutableOnPath(candidates: string[]): string | null {
   if (isWhisperExecutable) {
     const projectRoots = [
       process.cwd(),
+      path.resolve(__dirname, '../..'),
       path.resolve(__dirname, '../../..'),
     ];
     for (const root of projectRoots) {
@@ -87,9 +94,10 @@ export function findExecutableOnPath(candidates: string[]): string | null {
   return null;
 }
 
-function resolveModelFile(whisperExecutable: string, model: WhisperModel): string | null {
+function resolveModelFile(whisperExecutable: string, model: WhisperModel, customModelsDirectory?: string): string | null {
   const executableDir = path.dirname(whisperExecutable);
   const modelDirectories = [
+    ...(customModelsDirectory ? [customModelsDirectory] : []),
     executableDir,
     path.join(executableDir, 'models'),
     path.join(executableDir, '..', 'models'),
@@ -113,22 +121,69 @@ function resolveModelFile(whisperExecutable: string, model: WhisperModel): strin
   return null;
 }
 
-function runCommand(command: string, args: string[], cwd?: string): { stdout: string; stderr: string; status: number | null } {
-  const result = spawnSync(command, args, {
-    encoding: 'utf8',
-    shell: false,
-    cwd,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-
+export function getWhisperModelStatus(model: string, customModelsDirectory?: string): { installed: boolean; modelPath?: string; selectedExecutable?: string } {
+  const modelOption = WHISPER_MODELS.find((entry) => entry.value === model);
+  if (!modelOption) return { installed: false };
+  const executable = findExecutableOnPath(['whisper-cli', 'whisper-cli.exe', 'main', 'main.exe']);
+  const modelPath = executable ? resolveModelFile(executable, modelOption.value, customModelsDirectory) : null;
   return {
-    stdout: result.stdout ?? '',
-    stderr: result.stderr ?? '',
-    status: result.status,
+    installed: Boolean(modelPath),
+    modelPath: modelPath ?? undefined,
+    selectedExecutable: executable ?? undefined,
   };
 }
 
-export async function transcribeAudio(filePath: string, options: Partial<WhisperConfig> & { outputDir?: string } = {}): Promise<TranscriptionResult> {
+function runCommand(
+  command: string,
+  args: string[],
+  options: { cwd?: string; signal?: AbortSignal; onOutput?: (text: string) => void } = {},
+): Promise<{ stdout: string; stderr: string }> {
+  if (options.signal?.aborted) return Promise.reject(new Error('Transcrição cancelada.'));
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      shell: false,
+      windowsHide: true,
+      signal: options.signal,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    let pendingOutput = '';
+
+    const collect = (chunk: Buffer, stream: 'stdout' | 'stderr') => {
+      const text = chunk.toString();
+      if (stream === 'stdout') stdout += text;
+      else stderr += text;
+      pendingOutput += text;
+      const lines = pendingOutput.split(/\r?\n/);
+      pendingOutput = lines.pop() ?? '';
+      lines.forEach((line) => options.onOutput?.(line));
+    };
+
+    child.stdout.on('data', (chunk: Buffer) => collect(chunk, 'stdout'));
+    child.stderr.on('data', (chunk: Buffer) => collect(chunk, 'stderr'));
+    child.once('error', (error) => {
+      reject(options.signal?.aborted ? new Error('Transcrição cancelada.') : error);
+    });
+    child.once('close', (code) => {
+      if (pendingOutput) options.onOutput?.(pendingOutput);
+      if (options.signal?.aborted) {
+        reject(new Error('Transcrição cancelada.'));
+      } else if (code !== 0) {
+        reject(new Error(stderr.trim() || stdout.trim() || `${path.basename(command)} encerrou com código ${code ?? 'desconhecido'}.`));
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+}
+
+export async function transcribeAudio(
+  filePath: string,
+  options: TranscriptionOptions & { signal?: AbortSignal; onProgress?: (line: string) => void } = {},
+): Promise<TranscriptionResult> {
   const resolvedConfig = createWhisperConfig(options);
   const normalizedPath = path.resolve(filePath);
 
@@ -154,61 +209,57 @@ export async function transcribeAudio(filePath: string, options: Partial<Whisper
   const baseName = path.basename(normalizedPath, path.extname(normalizedPath));
   const wavPath = path.join(os.tmpdir(), `lucao-${Date.now()}-${baseName}.wav`);
 
-  const conversion = runCommand(ffmpegPath, ['-y', '-i', normalizedPath, '-vn', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1', wavPath]);
-  if (conversion.status !== 0) {
-    throw new Error(`Falha ao preparar o áudio para transcrição: ${conversion.stderr || conversion.stdout}`);
-  }
+  try {
+    await runCommand(ffmpegPath, ['-y', '-i', normalizedPath, '-vn', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1', wavPath], {
+      signal: options.signal,
+      onOutput: options.onProgress,
+    });
 
-  const executableName = path.basename(whisperExecutable).toLowerCase();
-  const whisperArgs: string[] = [];
-  let whisperWorkingDirectory: string | undefined;
-  const modelFile = resolveModelFile(whisperExecutable, resolvedConfig.model);
+    const executableName = path.basename(whisperExecutable).toLowerCase();
+    const whisperArgs: string[] = [];
+    let whisperWorkingDirectory: string | undefined;
+    const modelFile = resolveModelFile(whisperExecutable, resolvedConfig.model, options.modelsDirectory);
 
-  if (executableName.includes('main') || executableName.includes('whisper-cli') || executableName === 'whisper.exe') {
-    if (!modelFile) {
-      throw new Error(`Modelo do Whisper não encontrado para o perfil "${resolvedConfig.model}". Baixe o arquivo ggml-${resolvedConfig.model}.bin e coloque na pasta models do whisper.cpp.`);
+    if (executableName.includes('main') || executableName.includes('whisper-cli') || executableName === 'whisper.exe') {
+      if (!modelFile) {
+        throw new Error(`Modelo do Whisper não encontrado para o perfil "${resolvedConfig.model}". Baixe o arquivo ggml-${resolvedConfig.model}.bin e coloque na pasta models do whisper.cpp.`);
+      }
+
+      const outputBase = path.join(outputDir, `${baseName}-transcricao`);
+      whisperWorkingDirectory = path.dirname(modelFile);
+      const language = resolvedConfig.autoDetectLanguage
+        ? 'auto'
+        : resolvedConfig.language.toLowerCase() === 'pt-br'
+          ? 'pt'
+          : resolvedConfig.language;
+      whisperArgs.push('-m', path.basename(modelFile), '-f', wavPath, '-l', language, '-otxt', '-of', outputBase, '-pp');
+    } else {
+      whisperArgs.push(wavPath, '--model', resolvedConfig.model, '--language', resolvedConfig.language, '--output_dir', outputDir, '--output_format', 'txt');
     }
 
-    const outputBase = path.join(outputDir, `${baseName}-transcricao`);
-    whisperWorkingDirectory = path.dirname(modelFile);
-    const language = resolvedConfig.autoDetectLanguage
-      ? 'auto'
-      : resolvedConfig.language.toLowerCase() === 'pt-br'
-        ? 'pt'
-        : resolvedConfig.language;
-    whisperArgs.push('-m', path.basename(modelFile), '-f', wavPath, '-l', language, '-otxt', '-of', outputBase);
-  } else {
-    whisperArgs.push(wavPath, '--model', resolvedConfig.model, '--language', resolvedConfig.language, '--output_dir', outputDir, '--output_format', 'txt');
+    const transcriptFile = path.join(outputDir, `${baseName}-transcricao.txt`);
+    if (fs.existsSync(transcriptFile)) fs.unlinkSync(transcriptFile);
+    const whisperRun = await runCommand(whisperExecutable, whisperArgs, {
+      cwd: whisperWorkingDirectory,
+      signal: options.signal,
+      onOutput: options.onProgress,
+    });
+    const transcript = fs.existsSync(transcriptFile)
+      ? fs.readFileSync(transcriptFile, 'utf8').trim()
+      : whisperRun.stdout.trim();
+
+    if (!transcript) {
+      throw new Error('O processo terminou sem gerar texto transcrito. Verifique o modelo do Whisper e o arquivo de áudio.');
+    }
+
+    return {
+      fileName: baseName,
+      transcript,
+      outputPath: fs.existsSync(transcriptFile) ? transcriptFile : undefined,
+      language: resolvedConfig.language,
+      model: resolvedConfig.model,
+    };
+  } finally {
+    if (!options.keepTemporaryFiles && fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
   }
-
-  const whisperRun = runCommand(whisperExecutable, whisperArgs, whisperWorkingDirectory);
-  if (whisperRun.status !== 0) {
-    throw new Error(`Falha na transcrição: ${whisperRun.stderr || whisperRun.stdout}`);
-  }
-
-  const possibleOutputs = [
-    path.join(outputDir, `${baseName}-transcricao.txt`),
-    path.join(outputDir, `${baseName}.txt`),
-    path.join(outputDir, `${baseName}-transcricao.srt`),
-    path.join(outputDir, `${baseName}.srt`),
-  ];
-
-  const transcriptFile = possibleOutputs.find((candidate) => fs.existsSync(candidate));
-  let transcript = whisperRun.stdout.trim();
-
-  if (transcriptFile) {
-    transcript = fs.readFileSync(transcriptFile, 'utf8').trim();
-  }
-
-  if (!transcript) {
-    throw new Error('O processo terminou sem gerar texto transcrito. Verifique o modelo do Whisper e o arquivo de áudio.');
-  }
-
-  return {
-    fileName: baseName,
-    transcript,
-    outputPath: transcriptFile,
-    language: resolvedConfig.language,
-    model: resolvedConfig.model,
-  };
 }

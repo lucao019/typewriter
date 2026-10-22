@@ -4,9 +4,15 @@ export function isSupportedAudioFile(fileName: string): boolean {
   return AUDIO_EXTENSIONS.includes(fileName.toLowerCase().substring(fileName.lastIndexOf('.')) || '');
 }
 
-export function getAudioDurationEstimate(fileName: string): string {
-  const lower = fileName.toLowerCase();
-  if (lower.includes('long')) return '06:42';
-  if (lower.includes('podcast')) return '18:15';
-  return '03:20';
+export function formatAudioDuration(durationSeconds?: number): string {
+  if (!Number.isFinite(durationSeconds) || durationSeconds === undefined || durationSeconds < 0) {
+    return 'Duração indisponível';
+  }
+  const totalSeconds = Math.floor(durationSeconds);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+    : `${minutes}:${String(seconds).padStart(2, '0')}`;
 }

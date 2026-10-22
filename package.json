@@ -15,7 +15,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "better-sqlite3": "^11.7.0",
     "electron": "^34.0.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -34,7 +33,6 @@
   },
   "allowScripts": {
     "electron@34.5.8": true,
-    "better-sqlite3@11.10.0": true,
     "esbuild@0.25.12": true,
     "esbuild@0.21.5": true
   }

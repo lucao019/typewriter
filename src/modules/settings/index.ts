@@ -36,9 +36,7 @@ export function normalizeSettings(input: Partial<AppSettings> | undefined): AppS
   normalized.inputFolder = String(normalized.inputFolder || '');
   normalized.outputFolder = String(normalized.outputFolder || '');
   normalized.modelsFolder = String(normalized.modelsFolder || '');
-  normalized.maxConcurrentTasks = Number.isFinite(normalized.maxConcurrentTasks)
-    ? Math.max(1, Math.min(8, Number(normalized.maxConcurrentTasks)))
-    : DEFAULT_SETTINGS.maxConcurrentTasks;
+  normalized.maxConcurrentTasks = DEFAULT_SETTINGS.maxConcurrentTasks;
   normalized.keepTemporaryFiles = Boolean(normalized.keepTemporaryFiles);
   normalized.openOutputAfterExport = Boolean(normalized.openOutputAfterExport);
   normalized.startWithWindows = Boolean(normalized.startWithWindows);

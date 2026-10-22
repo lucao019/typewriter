@@ -9,7 +9,7 @@
 | TypeScript 5 | Tipagem e compilação dos processos principal e renderer |
 | Vite 6 | Servidor de desenvolvimento e build da interface |
 | Vitest 2 | Testes automatizados |
-| better-sqlite3 | Dependência para persistência local planejada |
+| JSON local | Persistência de fila, histórico, configurações e logs com gravação atômica |
 
 ## Transcrição local
 
@@ -20,6 +20,8 @@
 | Modelo Whisper `small` | Modelo padrão em português; download de aproximadamente 488 MB |
 
 O áudio e o modelo são processados localmente. O mecanismo não envia gravações a um serviço remoto.
+
+O arquivo persistente `lucao-data.json` fica no diretório `userData` do Electron. A preferência de retenção do WAV temporário é desativada por padrão.
 
 ## Ferramentas de desenvolvimento no Windows
 
