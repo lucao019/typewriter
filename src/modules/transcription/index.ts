@@ -26,12 +26,12 @@ export type TranscriptionOptions = Partial<WhisperConfig> & {
   keepTemporaryFiles?: boolean;
 };
 
-export const WHISPER_MODELS: Array<{ value: WhisperModel; label: string; memoryMb: number; speed: string; precision: string }> = [
-  { value: 'tiny', label: 'Tiny', memoryMb: 280, speed: 'Muito rápida', precision: 'Baixa' },
-  { value: 'base', label: 'Base', memoryMb: 500, speed: 'Rápida', precision: 'Boa' },
-  { value: 'small', label: 'Small', memoryMb: 1200, speed: 'Equilibrada', precision: 'Muito boa' },
-  { value: 'medium', label: 'Medium', memoryMb: 2500, speed: 'Mais lenta', precision: 'Alta' },
-  { value: 'large', label: 'Large', memoryMb: 5000, speed: 'Lenta', precision: 'Máxima' },
+export const WHISPER_MODELS: Array<{ value: WhisperModel; label: string; memoryMb: number; speed: string; precision: string; description: string }> = [
+  { value: 'tiny', label: 'Tiny', memoryMb: 280, speed: 'Muito rápida', precision: 'Baixa', description: 'Mais rápido, menor precisão. Ideal para rascunhos rápidos.' },
+  { value: 'base', label: 'Base', memoryMb: 500, speed: 'Rápida', precision: 'Boa', description: 'Velocidade e qualidade equilibradas para uso geral.' },
+  { value: 'small', label: 'Small', memoryMb: 1200, speed: 'Equilibrada', precision: 'Muito boa', description: 'Padrão recomendado. Boa precisão com desempenho adequado.' },
+  { value: 'medium', label: 'Medium', memoryMb: 2500, speed: 'Mais lenta', precision: 'Alta', description: 'Alta precisão, processamento mais lento.' },
+  { value: 'large', label: 'Large', memoryMb: 5000, speed: 'Lenta', precision: 'Máxima', description: 'Melhor qualidade. Requer memória significativa.' },
 ];
 
 export function getWhisperRequirements(model: WhisperModel): { memoryMb: number; note: string } {

@@ -70,7 +70,7 @@ function StatusBadge({ status }: { status: AudioFileStatus }) {
 
 export default function App() {
   const [activeNav, setActiveNav] = useState<NavKey>('home');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('lucao-sidebar-collapsed') === 'true');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('nexus-sidebar-collapsed') === 'true');
   const [files, setFiles] = useState<AudioItem[]>([]);
   const [history, setHistory] = useState<AudioItem[]>([]);
   const [models, setModels] = useState<ModelStatus[]>([]);
@@ -515,7 +515,7 @@ export default function App() {
 
   const renderModels = () => (
     <div className="page-content"><section className="panel"><div className="panel-header"><div><h2>Modelos Whisper locais</h2><p className="muted">A disponibilidade é verificada nos arquivos do computador.</p></div><button type="button" onClick={() => void refreshModels().then(refreshDiagnostics)}>Verificar novamente</button></div>
-      <div className="model-grid">{models.map((model) => <article className={`model-card ${model.selected ? 'selected' : ''}`} key={model.value}><div className="model-heading"><h3>{model.label}</h3><StatusBadge status={model.installed ? 'done' : 'waiting'} /></div><p>{model.speed} · {model.precision}</p><small>Memória estimada: {model.memoryMb} MB</small><small>Arquivo: {model.modelPath ?? 'Não encontrado'}</small><button type="button" className={model.selected ? 'primary small' : 'small'} onClick={() => void handleSelectModel(model.value)} disabled={!model.installed || model.selected}>{model.selected ? 'Selecionado' : model.installed ? 'Selecionar modelo' : 'Não instalado'}</button></article>)}</div>
+      <div className="model-grid">{models.map((model) => <article className={`model-card ${model.selected ? 'selected' : ''}`} key={model.value}><div className="model-heading"><h3>{model.label}</h3><StatusBadge status={model.installed ? 'done' : 'waiting'} /></div><p>{model.description ?? `${model.speed} · ${model.precision}`}</p><small>Memória estimada: {model.memoryMb} MB</small><small>Arquivo: {model.modelPath ?? 'Não encontrado'}</small><button type="button" className={model.selected ? 'primary small' : 'small'} onClick={() => void handleSelectModel(model.value)} disabled={!model.installed || model.selected}>{model.selected ? 'Selecionado' : model.installed ? 'Selecionar modelo' : 'Não instalado'}</button></article>)}</div>
       <p className="muted">O app não baixa modelos pela interface. Use o instalador local documentado para instalar whisper.cpp e o modelo small; modelos que não estiverem no disco não são marcados como disponíveis.</p>
     </section></div>
   );
@@ -561,17 +561,17 @@ export default function App() {
   return (
     <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <aside className="sidebar">
-        <div className="brand"><div className="brand-mark">L</div><div className="brand-copy"><strong>LUCAO</strong><span>Audio Transcriber</span></div></div>
-        <button type="button" className="sidebar-toggle" title={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'} aria-label={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'} onClick={() => setSidebarCollapsed((current) => { localStorage.setItem('lucao-sidebar-collapsed', String(!current)); return !current; })}>{sidebarCollapsed ? '»' : '«'}</button>
+        <div className="brand"><div className="brand-mark">▣</div><div className="brand-copy"><strong>NEXUS</strong><span>Transcriber</span></div></div>
+        <button type="button" className="sidebar-toggle" title={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'} aria-label={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'} onClick={() => setSidebarCollapsed((current) => { localStorage.setItem('nexus-sidebar-collapsed', String(!current)); return !current; })}>{sidebarCollapsed ? '»' : '«'}</button>
         <nav className="nav">{navGroups.map((group) => <div className="nav-group" key={group.title}><span className="nav-group-title">{group.title}</span>{group.items.map((item) => <button key={item.key} type="button" title={sidebarCollapsed ? item.label : undefined} aria-label={item.label} className={`nav-item ${activeNav === item.key ? 'active' : ''}`} onClick={() => { setActiveNav(item.key); setStatusMessage(''); }}><span className="nav-icon">{item.icon}</span><span className="nav-label">{item.label}</span></button>)}</div>)}</nav>
         <div className="sidebar-status"><span className={`engine-dot ${engineReady ? 'online' : 'offline'}`} /><div className="sidebar-status-copy"><span>Motor {engineReady ? 'pronto' : 'indisponível'}</span><strong>v{version}</strong></div></div>
       </aside>
       <main className="workspace">
-        <header className="topbar"><div><p className="eyebrow">LUCAO / {activeNav}</p><h1>{title}</h1></div>{activeNav !== 'new' && <button type="button" className="primary" onClick={() => setActiveNav('new')}>＋ Nova transcrição</button>}</header>
+        <header className="topbar"><div><p className="eyebrow">NEXUS / {activeNav}</p><h1>{title}</h1></div>{activeNav !== 'new' && <button type="button" className="primary" onClick={() => setActiveNav('new')}>＋ Nova transcrição</button>}</header>
         {statusMessage && <div className="status-banner" role="status">{statusMessage}<button type="button" aria-label="Fechar mensagem" onClick={() => setStatusMessage('')}>×</button></div>}
         <div className="page-enter" key={activeNav}>{pageContent[activeNav]}</div>
       </main>
-      {selectedTranscript && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedTranscript(null); }}><section className="panel transcript-modal" role="dialog" aria-modal="true" aria-labelledby="transcript-title"><div className="panel-header"><div><p className="eyebrow">TRANSCRIÇÃO</p><h2 id="transcript-title">{selectedTranscript.name}</h2></div><button type="button" aria-label="Fechar transcrição" onClick={() => setSelectedTranscript(null)}>×</button></div><p className="muted">{formatDate(selectedTranscript.updatedAt)} · {selectedTranscript.model}</p><div className="transcript-body">{selectedTranscript.transcript}</div><div className="panel-actions"><button type="button" onClick={() => void handleCopyTranscript(selectedTranscript)}>Copiar</button><button type="button" className="primary" onClick={() => void handleExportTranscript(selectedTranscript)}>Exportar TXT</button></div></section></div>}
+      {selectedTranscript && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedTranscript(null); }}><section className="panel transcript-modal" role="dialog" aria-modal="true" aria-labelledby="transcript-title"><div className="panel-header"><div><p className="eyebrow">TRANSCRIÇÃO</p><h2 id="transcript-title">{selectedTranscript.name}</h2></div><button type="button" aria-label="Fechar transcrição" onClick={() => setSelectedTranscript(null)}>×</button></div><p className="muted">{formatDate(selectedTranscript.updatedAt)} · {selectedTranscript.model}</p><div className="transcript-body">{selectedTranscript.transcript}</div><div className="panel-actions"><button type="button" className="primary" onClick={() => void handleCopyTranscript(selectedTranscript)}>Copiar texto</button><button type="button" onClick={() => void handleExportTranscript(selectedTranscript)}>Exportar TXT</button></div></section></div>}
     </div>
   );
 }

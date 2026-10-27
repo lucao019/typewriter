@@ -10,6 +10,7 @@ export type ModelStatus = {
   memoryMb: number;
   speed: string;
   precision: string;
+  description?: string;
   installed: boolean;
   modelPath?: string;
   selectedExecutable?: string;
